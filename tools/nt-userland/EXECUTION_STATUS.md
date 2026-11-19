@@ -17,8 +17,8 @@ The repository now has a first, deliberately restricted PE execution path:
    home area and transfers control using the x86 `start_thread()` path.
 5. Only after the image and stack are ready does it set `PF_WINDOWS_NT`.
 6. The NT syscall dispatcher implements two services for the first sample:
-   - service 9, `NtWriteConsole(fd, buffer, length)`: bounded user-buffer copy
-     and write to a writable character device;
+   - service 9, `NtWriteConsole(fd, buffer, length)`: bounded VFS write from the user buffer
+     to a writable character device;
    - service 6, `NtTerminateProcess(-1, exit_code)`: terminate the current
      process and return to the parent shell.
 7. `win_demo/hello_world.S` is a freestanding AMD64 entry point with no CRT,
@@ -70,8 +70,8 @@ exit status zero.
 ## Verification status
 
 The implementation and run path are committed, but **the first execution is
-not yet verified**. No kernel build, Rust compilation, linker invocation, or
-QEMU boot has been run during this work. Therefore it is not yet honest to
+not yet verified**. No kernel build, assembler/linker invocation, or QEMU boot has been run during
+this work. Therefore it is not yet honest to
 claim the EXE has been proven to run. The next validation step, when builds
 are permitted, is to build the image and inspect the PE headers/sections if
 the strict loader rejects it, then boot and run the command above.

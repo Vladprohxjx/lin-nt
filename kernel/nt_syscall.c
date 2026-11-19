@@ -10,7 +10,7 @@
 
 #include <linux/kernel.h>
 #include <linux/ntsyscall.h>
-#include <linux/ptrace.h>
+#include <linux/nospec.h>
 #include <linux/types.h>
 #include <uapi/linux/ntsyscall.h>
 
@@ -38,10 +38,12 @@ long do_nt_syscall(struct pt_regs *regs, unsigned long nr)
 {
 	u32 status;
 
-	if (nr >= ARRAY_SIZE(nt_syscall_table))
+	if (nr >= ARRAY_SIZE(nt_syscall_table)) {
 		status = LINUX_NT_STATUS_INVALID_SYSTEM_SERVICE;
-	else
+	} else {
+		nr = array_index_nospec(nr, ARRAY_SIZE(nt_syscall_table));
 		status = nt_syscall_table[nr](regs);
+	}
 
 	/* NTSTATUS is a 32-bit value in EAX, zero-extended in RAX. */
 	return (long)status;

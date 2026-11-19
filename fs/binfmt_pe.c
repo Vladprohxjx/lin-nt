@@ -14,6 +14,7 @@
 #include <linux/overflow.h>
 #include <linux/pe.h>
 #include <linux/slab.h>
+#include <linux/sizes.h>
 
 static int pe_read(struct file *file, void *buf, size_t size, u64 offset)
 {
@@ -65,14 +66,14 @@ static int pe_validate_sections(struct file *file, u64 file_size,
 			goto out;
 		}
 
-		if (sections[i].virtual_address &&
+		if (sections[i].virtual_address < opt->header_size ||
 		    !IS_ALIGNED(sections[i].virtual_address, opt->section_align)) {
 			ret = -ENOEXEC;
 			goto out;
 		}
 
 		if (sections[i].raw_data_size) {
-			if (!sections[i].data_addr ||
+			if (sections[i].data_addr < opt->header_size ||
 			    !IS_ALIGNED(sections[i].data_addr, opt->file_align) ||
 			    !IS_ALIGNED(sections[i].raw_data_size,
 					opt->file_align) ||
@@ -152,8 +153,13 @@ static int pe_validate_directories(struct file *file,
 			return -ENOEXEC;
 
 		/* The certificate directory is a file offset, not an RVA. */
-		if (i == 4)
+		if (i == 4) {
+			if (check_add_overflow((u64)dir.virtual_address,
+					       (u64)dir.size, &end) ||
+			    end > i_size_read(file_inode(file)))
+				return -ENOEXEC;
 			continue;
+		}
 		if (check_add_overflow((u64)dir.virtual_address,
 				       (u64)dir.size, &end) ||
 		    end > opt->image_size)
@@ -221,7 +227,7 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	if (opt.section_align < PAGE_SIZE) {
 		if (opt.section_align != opt.file_align)
 			return -ENOEXEC;
-	} else if (opt.file_align < SZ_512) {
+	} else if (opt.file_align < 512) {
 		return -ENOEXEC;
 	}
 

@@ -375,7 +375,7 @@ static int load_pe_binary(struct linux_binprm *bprm)
 		goto out;
 
 	image_base = opt.image_base;
-	if (!IS_ALIGNED(image_base, PAGE_SIZE) ||
+	if (!IS_ALIGNED(image_base, SZ_64K) ||
 	    image_base < PAGE_SIZE ||
 	    check_add_overflow(image_base, (unsigned long)opt.image_size,
 			       &image_end) ||

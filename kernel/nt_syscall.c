@@ -9,12 +9,63 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/file.h>
+#include <linux/fs.h>
+#include <linux/sched/signal.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
 #include <linux/ntsyscall.h>
 #include <linux/nospec.h>
 #include <linux/types.h>
 #include <uapi/linux/ntsyscall.h>
 
 typedef u32 (*nt_syscall_fn_t)(struct pt_regs *regs);
+
+static u32 nt_syscall_terminate_process(struct pt_regs *regs)
+{
+	/* Only the current-process pseudo handle is supported in this ABI. */
+	if (regs->r10 != (unsigned long)-1)
+		return LINUX_NT_STATUS_INVALID_HANDLE;
+
+	do_group_exit((int)(regs->dx & 0xff));
+	return LINUX_NT_STATUS_SUCCESS;
+}
+
+static u32 nt_syscall_write_console(struct pt_regs *regs)
+{
+	struct fd f;
+	struct file *file;
+	void *buffer;
+	size_t len = regs->r8;
+	loff_t pos = 0;
+	ssize_t written;
+
+	if (!len || len > PAGE_SIZE || !regs->dx)
+		return LINUX_NT_STATUS_INVALID_PARAMETER;
+
+	f = fdget((unsigned int)regs->r10);
+	if (fd_empty(f))
+		return LINUX_NT_STATUS_INVALID_HANDLE;
+	file = fd_file(f);
+	if (!(file->f_mode & FMODE_WRITE) ||
+	    !S_ISCHR(file_inode(file)->i_mode)) {
+		fdput(f);
+		return LINUX_NT_STATUS_INVALID_HANDLE;
+	}
+
+	buffer = memdup_user((const void __user *)regs->dx, len);
+	if (IS_ERR(buffer)) {
+		fdput(f);
+		return LINUX_NT_STATUS_ACCESS_VIOLATION;
+	}
+
+	written = kernel_write(file, buffer, len, &pos);
+	kfree(buffer);
+	fdput(f);
+
+	return written == len ? LINUX_NT_STATUS_SUCCESS :
+				LINUX_NT_STATUS_UNSUCCESSFUL;
+}
 
 static u32 nt_syscall_unimplemented(struct pt_regs *regs)
 {
@@ -29,9 +80,10 @@ static const nt_syscall_fn_t nt_syscall_table[LINUX_NT_SYS_MAX] = {
 	[LINUX_NT_SYS_NtReadFile] = nt_syscall_unimplemented,
 	[LINUX_NT_SYS_NtWriteFile] = nt_syscall_unimplemented,
 	[LINUX_NT_SYS_NtClose] = nt_syscall_unimplemented,
-	[LINUX_NT_SYS_NtTerminateProcess] = nt_syscall_unimplemented,
+	[LINUX_NT_SYS_NtTerminateProcess] = nt_syscall_terminate_process,
 	[LINUX_NT_SYS_NtQuerySystemInformation] = nt_syscall_unimplemented,
 	[LINUX_NT_SYS_NtUserDrawFrame] = nt_syscall_unimplemented,
+	[LINUX_NT_SYS_NtWriteConsole] = nt_syscall_write_console,
 };
 
 long do_nt_syscall(struct pt_regs *regs, unsigned long nr)

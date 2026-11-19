@@ -1,101 +1,54 @@
-# PE execution bring-up: Hello World target
+# PE32+ Hello World execution status
 
-This document defines the first useful execution milestone for the experimental
-NT personality. It is deliberately explicit about what is implemented and what
-is not: the current PE handler is a validator, not an executable image loader.
+## Implemented source path
 
-## Target milestone
+The repository now has a first, deliberately restricted PE execution path:
 
-The first supported executable is a deliberately constrained, static,
-x86-64 PE32+ console program named `hello_world.exe`:
+1. `fs/binfmt_pe.c` validates AMD64 PE32+ CUI headers, section and file
+   boundaries, entry-point coverage, address arithmetic, image-base bounds,
+   directory ranges, page alignment, and W^X permissions.
+2. Before the point of no return, malformed or unsupported images are rejected.
+   The loader then uses `begin_new_exec()`, `set_personality_64bit()`,
+   `setup_new_exec()`, and `setup_arg_pages()`.
+3. It maps the PE headers read-only and maps each section from the executable
+   file at its preferred ImageBase using `MAP_FIXED_NOREPLACE`. Anonymous,
+   zero-filled mappings provide virtual section tails such as .bss.
+4. It prepares a 16-byte ABI-aligned Windows-x64 entry stack with the 32-byte
+   home area and transfers control using the x86 `start_thread()` path.
+5. Only after the image and stack are ready does it set `PF_WINDOWS_NT`.
+6. The NT syscall dispatcher implements two services for the first sample:
+   - service 9, `NtWriteConsole(fd, buffer, length)`: bounded user-buffer copy
+     and write to a writable character device;
+   - service 6, `NtTerminateProcess(-1, exit_code)`: terminate the current
+     process and return to the parent shell.
+7. `win_demo` is a freestanding no-CRT PE entry point that writes
+   `Hello, world!\r\n` to fd 1 and exits. The initramfs stages it as
+   `/windows/hello_world.exe`.
 
-- AMD64 PE32+ executable image (not a DLL).
-- Native entry point, no CRT startup, no TLS callbacks.
-- No imports, delay imports, bound imports, or forwarded exports.
-- No base relocations in the first fixed-base milestone. The image must be
-  loadable at its preferred ImageBase and must not collide with another VMA.
-- No .NET/CLR, WOW64, GUI subsystem, SEH/unwind runtime, or Windows system DLLs.
-- Uses only the project-local NT syscall ABI documented in
-  `include/uapi/linux/ntsyscall.h`.
-- Exits through the project's NT process-termination service once that service
-  has a real implementation.
+## Exact supported image profile
 
-This restricted target is intentional. A static PE can prove that the kernel
-can create an address space, map image sections, establish a user stack, enter
-the PE entry point, dispatch an NT syscall, and return to Linux without first
-implementing the Windows DLL ecosystem.
+This first loader is not a general Windows loader. It accepts only:
 
-## Loader implementation gates
+- AMD64 PE32+ executable images with Windows CUI subsystem.
+- A fixed, page-aligned preferred ImageBase in the user address range.
+- Page-aligned file layout: FileAlignment is exactly PAGE_SIZE, raw offsets and
+  raw section sizes are page-aligned, and section RVAs are page-aligned.
+- Image size no larger than 1 GiB.
+- No imports, IAT, bound/delay imports, base relocations, TLS, x64 exception
+  directory, load config/CFG, or CLR directory.
+- No dynamic-base/high-entropy-VA image flag.
+- No section that is both writable and executable.
+- A freestanding entry point that does not require PEB, TEB, TLS, Windows DLLs,
+  CRT startup, SEH/unwind support, or GUI services.
 
-The PE loader must not set `PF_WINDOWS_NT` or transfer control until every
-gate below succeeds. Failure before `begin_new_exec()` must leave the old
-process intact. Failure after the point of no return must follow the same
-fatal-exec rules as the ELF loader.
+Images that do not match this profile are rejected with `-ENOEXEC`. This is
+intentional: loading at a different base without applying relocations or
+pretending to provide missing NT runtime structures would be unsafe.
 
-1. **Preflight validation**
-   - Validate DOS/NT/COFF/PE32+ headers and all arithmetic with overflow checks.
-   - Reject unsupported subsystem, DLL, CLR, TLS, exception, import and
-     relocation directories for the initial static profile.
-   - Validate section raw ranges, virtual ranges, permissions, entry-point
-     coverage, image base, image size, and user address limits.
-   - Bound all allocations by file size and a conservative image-size limit.
+## Build and run
 
-2. **Address-space construction**
-   - Follow the established `load_elf_binary()` ordering:
-     validate everything possible before `begin_new_exec()`, then call
-     `begin_new_exec()`, `setup_new_exec()`, and `setup_arg_pages()`.
-   - Reserve the preferred image range with a non-replacing mapping operation.
-     Never silently relocate an image until relocation processing exists.
-   - Map headers and sections with page-granular permissions. Do not create
-     writable+executable mappings; copy file data while writable, then apply
-     final protections.
-   - Zero the virtual tail of each section (the PE equivalent of BSS).
-   - Keep gaps unmapped where possible and reject overlapping page mappings
-     whose permissions cannot be represented safely.
-
-3. **Initial process state**
-   - Build a valid, aligned x86-64 user stack and a documented initial
-     argument/environment contract.
-   - Supply the minimum process parameters required by the supported runtime.
-   - Do not invent a Windows PEB/TEB or GS base by writing an MSR ad hoc.
-     Thread-local state must be integrated with x86 context switching,
-     clone, signal delivery, ptrace and arch_prctl before a TEB is exposed.
-   - Set the NT task flag only after the image, stack, and runtime contract are
-     fully installed.
-
-4. **Entry and syscall path**
-   - Set RIP to the validated PE AddressOfEntryPoint and RSP to the prepared
-     user stack using the architecture's normal `start_thread()` path.
-   - Keep the Linux syscall ABI for ordinary Linux tasks unchanged.
-   - For NT tasks, dispatch only the documented project-local service table.
-     Every implemented service must validate user pointers and return a
-     defined NTSTATUS.
-
-5. **Hello World output**
-   - Add a narrowly scoped console-output service or a real handle-backed
-     `NtWriteFile` implementation.
-   - Copy user buffers with the normal uaccess helpers; never dereference
-     userspace pointers directly in kernel context.
-   - The first sample must not depend on ntdll/kernel32/user32 from Windows.
-
-## Current repository state (source inspection only)
-
-The current tree has:
-- PE32+ header and section validation in `fs/binfmt_pe.c`.
-- The PE handler intentionally returns `-ENOEXEC` after validation.
-- NT syscall numbers and x86-64 dispatch routing.
-- A syscall table whose entries all return `STATUS_NOT_IMPLEMENTED`.
-- A Rust no-CRT PE entry-point scaffold, not a working Hello World program.
-- A QEMU/initramfs build script that has not been run.
-
-Therefore **the current tree cannot execute `hello_world.exe`**. The guide below
-is the eventual invocation contract, not a claim that it works today.
-
-## Build and run (once the loader milestone is implemented)
-
-From the repository root, on an x86-64 Linux build host with the kernel build
-dependencies, Rust, the `x86_64-pc-windows-gnu` Rust target, MinGW-w64,
-QEMU, cpio, gzip, readelf, and a statically linked BusyBox installed:
+On an x86-64 Linux build host with kernel build dependencies, Rust, MinGW-w64,
+QEMU, cpio, gzip, readelf, and a statically linked BusyBox:
 
 ```sh
 rustup target add x86_64-pc-windows-gnu
@@ -103,20 +56,28 @@ export BUSYBOX=/absolute/path/to/static/busybox
 bash tools/nt-userland/build_distro.sh
 ```
 
-When QEMU reaches the BusyBox shell, the intended command is:
+The script builds the kernel and PE target, creates the initramfs, and starts
+QEMU. At the BusyBox shell:
 
 ```sh
 /windows/hello_world.exe
 ```
 
-The shell's exec path must dispatch that file to `CONFIG_BINFMT_PE`. Until
-the loader, entry setup, and at least one output syscall are implemented, this
-command is expected to fail and must not be described as a successful test.
+Expected output is `Hello, world!`, followed by a return to the shell with
+exit status zero.
 
-## Validation policy
+## Verification status
 
-No build, compiler, linker, or QEMU invocation is part of source-only review.
-When execution testing is later authorized, the first acceptance test is:
-the process reaches its PE entry point, writes exactly one
-`Hello, world!\n` line through the NT ABI, exits with status zero, and does
-not crash or corrupt the parent shell.
+The implementation and run path are committed, but **the first execution is
+not yet verified**. No kernel build, Rust compilation, linker invocation, or
+QEMU boot has been run during this work. Therefore it is not yet honest to
+claim the EXE has been proven to run. The next validation step, when builds
+are permitted, is to build the image and inspect the PE headers/sections if
+the strict loader rejects it, then boot and run the command above.
+
+## Deliberately not implemented
+
+General Windows binary compatibility remains out of scope for this first
+milestone: imports and DLL loading, relocations/ASLR, PEB/TEB and GS-based TLS,
+SEH/unwind dispatch, Windows object handles, file I/O semantics, process/thread
+creation, GUI, and broad NT syscall coverage are not implemented.

@@ -49,16 +49,16 @@ pretending to provide missing NT runtime structures would be unsafe.
 ## Build and run
 
 On an x86-64 Linux build host with kernel build dependencies, MinGW-w64
-(`x86_64-w64-mingw32-gcc`), QEMU, cpio, gzip, readelf, and a statically
-linked BusyBox:
+(`x86_64-w64-mingw32-gcc`), QEMU, cpio, gzip, readelf, Python 3, and a statically linked BusyBox:
 
 ```sh
 export BUSYBOX=/absolute/path/to/static/busybox
 bash tools/nt-userland/build_distro.sh
 ```
 
-The script builds the kernel, assembles and links the PE target, creates the
-initramfs, and starts QEMU. At the BusyBox shell:
+The script builds the kernel, assembles and links the PE target, verifies its
+headers and section layout with `verify_pe.py`, creates the initramfs, and
+starts QEMU. At the BusyBox shell:
 
 ```sh
 /windows/hello_world.exe

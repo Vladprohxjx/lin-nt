@@ -90,11 +90,13 @@ __visible noinstr bool do_syscall_64(struct pt_regs *regs, long nr)
 	if (likely(syscall_enter_from_user_mode_randomize_stack(regs, &nr))) {
 		instrumentation_begin();
 
-		#ifdef CONFIG_BINFMT_PE
+
+#ifdef CONFIG_BINFMT_PE
 		if (task_is_windows_nt(current)) {
 			regs->ax = do_nt_syscall(regs, nr);
 		} else
-		#endif
+
+#endif
 		if (unlikely(!do_syscall_x64(regs, nr))) {
 			/*
 			 * The special treatment of syscall number -1 is a

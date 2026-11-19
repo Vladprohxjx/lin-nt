@@ -58,6 +58,7 @@ done
 
 cp target/x86_64-pc-windows-gnu/release/win_demo.exe \
     "$ROOTFS/windows/hello_world.exe"
+chmod 0755 "$ROOTFS/windows/hello_world.exe"
 
 cat > "$ROOTFS/init" <<'INIT'
 #!/bin/sh

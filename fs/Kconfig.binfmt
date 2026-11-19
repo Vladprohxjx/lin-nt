@@ -3,15 +3,14 @@
 menu "Executable file formats"
 
 config BINFMT_PE
-	bool "Experimental PE32+ image recognition (x86-64)"
+	bool "Experimental fixed-base PE32+ execution (x86-64)"
 	depends on X86_64 && MMU
 	help
-	  Enable an experimental PE32+ image format handler.  The current
-	  implementation validates AMD64 PE headers and section table bounds,
-	  but does not yet map images or provide the Windows NT user ABI.  Valid
-	  PE images therefore still fail with -ENOEXEC.  This option is intended
-	  as an incremental development scaffold, not as Windows application
-	  compatibility.  If unsure, say N.
+	  Enable the restricted AMD64 PE32+ loader and project-local NT syscall
+	  ABI.  The first execution profile supports fixed-base Windows CUI
+	  images with page-aligned sections and no imports, relocations, TLS,
+	  exception metadata, CLR, or Windows DLL dependencies.  It is not
+	  general Windows application compatibility.  If unsure, say N.
 
 config BINFMT_ELF
 	bool "Kernel support for ELF binaries"

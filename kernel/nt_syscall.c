@@ -12,6 +12,7 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/sched/signal.h>
+#include <linux/sched/task.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/ntsyscall.h>

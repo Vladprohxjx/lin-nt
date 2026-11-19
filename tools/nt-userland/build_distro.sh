@@ -45,9 +45,19 @@ scripts/config --enable BINFMT_PE \
 make olddefconfig
 make -j"$(nproc)" bzImage
 
-cd "$WORK"
-CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="-C force-unwind-tables=no -C link-arg=-nostartfiles -C link-arg=-nostdlib -C link-arg=-Wl,-e,mainCRTStartup -C link-arg=-Wl,--file-alignment,4096 -C link-arg=-Wl,--section-alignment,4096 -C link-arg=-Wl,--image-base,0x140000000 -C link-arg=-Wl,--disable-dynamicbase -C link-arg=-Wl,--disable-high-entropy-va -C link-arg=-Wl,--disable-reloc-section" \
-    cargo build --release -p win_demo
+mkdir -p "$BUILD"
+x86_64-w64-mingw32-gcc -c -x assembler-with-cpp \
+    "$WORK/win_demo/hello_world.S" -o "$BUILD/hello_world.o"
+x86_64-w64-mingw32-gcc -nostdlib -nostartfiles \
+    -Wl,-e,mainCRTStartup \
+    -Wl,--subsystem,console \
+    -Wl,--file-alignment,4096 \
+    -Wl,--section-alignment,4096 \
+    -Wl,--image-base,0x140000000 \
+    -Wl,--disable-dynamicbase \
+    -Wl,--disable-high-entropy-va \
+    -Wl,--disable-reloc-section \
+    "$BUILD/hello_world.o" -o "$BUILD/hello_world.exe"
 
 rm -rf "$ROOTFS"
 mkdir -p "$ROOTFS"/{bin,sbin,dev,proc,sys,tmp,windows}
@@ -58,8 +68,7 @@ for applet in sh mount mkdir echo cat ls ps dmesg; do
     ln -sf busybox "$ROOTFS/bin/$applet"
 done
 
-cp target/x86_64-pc-windows-gnu/release/win_demo.exe \
-    "$ROOTFS/windows/hello_world.exe"
+cp "$BUILD/hello_world.exe" "$ROOTFS/windows/hello_world.exe"
 chmod 0755 "$ROOTFS/windows/hello_world.exe"
 
 cat > "$ROOTFS/init" <<'INIT'

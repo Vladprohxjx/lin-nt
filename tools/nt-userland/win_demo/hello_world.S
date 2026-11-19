@@ -31,4 +31,3 @@ mainCRTStartup:
 hello_message:
 	.ascii "Hello, world!\r\n"
 
-	.section .note.GNU-stack,"",@progbits

@@ -48,6 +48,7 @@ static u32 nt_syscall_write_console(struct pt_regs *regs)
 		return LINUX_NT_STATUS_INVALID_HANDLE;
 	file = fd_file(f);
 	if (!(file->f_mode & FMODE_WRITE) ||
+	    !(file->f_mode & FMODE_CAN_WRITE) ||
 	    !S_ISCHR(file_inode(file)->i_mode)) {
 		fdput(f);
 		return LINUX_NT_STATUS_INVALID_HANDLE;
@@ -57,8 +58,11 @@ static u32 nt_syscall_write_console(struct pt_regs *regs)
 	written = vfs_write(file, (const char __user *)regs->dx, len, &pos);
 	fdput(f);
 
-	return written == len ? LINUX_NT_STATUS_SUCCESS :
-				LINUX_NT_STATUS_UNSUCCESSFUL;
+	if (written == len)
+		return LINUX_NT_STATUS_SUCCESS;
+	if (written == -EFAULT)
+		return LINUX_NT_STATUS_ACCESS_VIOLATION;
+	return LINUX_NT_STATUS_UNSUCCESSFUL;
 }
 
 static u32 nt_syscall_unimplemented(struct pt_regs *regs)

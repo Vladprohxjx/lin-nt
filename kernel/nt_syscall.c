@@ -4,8 +4,8 @@
  *
  * The syscall numbers here form a project-local ABI for the matching NT
  * runtime.  They intentionally do not claim compatibility with Microsoft's
- * build-specific system service tables.  Individual services will be added
- * only when their argument marshalling and object semantics are implemented.
+ * build-specific system service tables.  Only the documented minimal
+ * services are implemented; all other entries return NOT_IMPLEMENTED.
  */
 
 #include <linux/kernel.h>

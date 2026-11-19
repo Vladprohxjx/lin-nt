@@ -10,6 +10,12 @@
  * Windows.  The x86-64 entry ABI follows the Windows syscall register
  * convention: argument 1 in R10, then RDX, R8 and R9; later arguments are
  * passed in the caller's stack argument area.
+ *
+ * The initial console profile uses NtWriteConsole(fd, user_buffer, length):
+ * fd is a Linux descriptor for a writable character device, and length is
+ * limited to PAGE_SIZE. NtTerminateProcess accepts only the current-process
+ * pseudo handle (-1) and an 8-bit exit code. These are bring-up services,
+ * not Microsoft-compatible NT object/handle semantics.
  */
 #define LINUX_NT_SYS_NtAllocateVirtualMemory	0
 #define LINUX_NT_SYS_NtFreeVirtualMemory	1

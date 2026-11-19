@@ -1231,7 +1231,8 @@ int begin_new_exec(struct linux_binprm * bprm)
 		goto out_unlock;
 
 	me->flags &= ~(PF_RANDOMIZE | PF_FORKNOEXEC |
-					PF_NOFREEZE | PF_NO_SETAFFINITY);
+					PF_NOFREEZE | PF_NO_SETAFFINITY |
+					PF_WINDOWS_NT);
 	flush_thread();
 	me->personality &= ~bprm->per_clear;
 

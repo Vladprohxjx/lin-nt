@@ -70,8 +70,9 @@ static int pe_validate_sections(struct file *file, u64 file_size,
 
 		extent = max_t(u32, sections[i].virtual_size,
 			       sections[i].raw_data_size);
-		if (!extent ||
-		    check_add_overflow(extent, (u64)opt->section_align - 1,
+		if (!extent)
+			continue;
+		if (check_add_overflow(extent, (u64)opt->section_align - 1,
 				       &aligned_extent)) {
 			ret = -ENOEXEC;
 			goto out;
@@ -410,10 +411,12 @@ static int load_pe_binary(struct linux_binprm *bprm)
 
 	for (i = 0; i < pe.sections; i++) {
 		unsigned long begin = image_base + sections[i].virtual_address;
-		unsigned long end = begin +
-			PAGE_ALIGN(max(sections[i].virtual_size,
-				       sections[i].raw_data_size));
+		unsigned long extent = max(sections[i].virtual_size,
+					    sections[i].raw_data_size);
+		unsigned long end = begin + PAGE_ALIGN(extent);
 
+		if (!extent)
+			continue;
 		if (sections[i].flags & IMAGE_SCN_MEM_EXECUTE) {
 			start_code = min(start_code, begin);
 			end_code = max(end_code, end);

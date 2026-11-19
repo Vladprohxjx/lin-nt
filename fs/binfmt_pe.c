@@ -102,7 +102,6 @@ static int pe_validate_sections(struct file *file, u64 file_size,
 
 		/* The first loader requires page-granular, W^X section mappings. */
 		if (!IS_ALIGNED(sections[i].virtual_address, PAGE_SIZE) ||
-		    !IS_ALIGNED(extent, PAGE_SIZE) ||
 		    (sections[i].raw_data_size &&
 		     (!IS_ALIGNED(sections[i].data_addr, PAGE_SIZE) ||
 		      !IS_ALIGNED(sections[i].raw_data_size, PAGE_SIZE))) ||

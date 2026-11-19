@@ -103,6 +103,21 @@ static int pe_validate_sections(struct file *file, u64 file_size,
 						sections[j].raw_data_size);
 			u64 prev_end, aligned_prev_extent;
 
+			if (sections[i].raw_data_size &&
+			    sections[j].raw_data_size) {
+				u64 prev_raw_end;
+
+				if (check_add_overflow(
+					    (u64)sections[j].data_addr,
+					    (u64)sections[j].raw_data_size,
+					    &prev_raw_end) ||
+				    (sections[i].data_addr < prev_raw_end &&
+				     sections[j].data_addr < raw_end)) {
+					ret = -ENOEXEC;
+					goto out;
+				}
+			}
+
 			if (!extent || !prev_extent)
 				continue;
 			if (check_add_overflow(prev_extent,
@@ -209,7 +224,7 @@ static int load_pe_binary(struct linux_binprm *bprm)
 		return -ENOEXEC;
 
 	pe_offset = mz.peaddr;
-	if (pe_offset > file_size ||
+	if (pe_offset < sizeof(mz) || pe_offset > file_size ||
 	    file_size - pe_offset < sizeof(pe))
 		return -ENOEXEC;
 

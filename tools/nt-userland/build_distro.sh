@@ -43,7 +43,7 @@ make -j"$(nproc)" bzImage
 
 cd "$WORK"
 cargo build --release -p ntdll -p kernel32 -p user32
-CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="-C link-arg=-nostartfiles -C link-arg=-Wl,-e,mainCRTStartup" \
+CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="-C force-unwind-tables=no -C link-arg=-nostartfiles -C link-arg=-Wl,-e,mainCRTStartup -C link-arg=-Wl,--file-alignment,4096 -C link-arg=-Wl,--section-alignment,4096 -C link-arg=-Wl,--image-base,0x140000000 -C link-arg=-Wl,--disable-dynamicbase -C link-arg=-Wl,--disable-reloc-section" \\
     cargo build --release -p win_demo
 
 rm -rf "$ROOTFS"
@@ -70,7 +70,7 @@ cat > "$ROOTFS/init" <<'INIT'
 /bin/mount -t sysfs sysfs /sys
 /bin/mount -t devtmpfs devtmpfs /dev
 echo "Linux NT hybrid kernel initramfs"
-echo "BusyBox is available; PE execution remains experimental."
+echo "Try /windows/hello_world.exe for the static PE32+ smoke test."
 exec /bin/sh
 INIT
 chmod 0755 "$ROOTFS/init"

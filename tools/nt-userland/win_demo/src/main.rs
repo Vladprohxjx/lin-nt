@@ -6,7 +6,7 @@ use core::arch::asm;
 const LINUX_NT_SYS_NT_TERMINATE_PROCESS: u64 = 6;
 const LINUX_NT_SYS_NT_WRITE_CONSOLE: u64 = 9;
 
-static MESSAGE: &[u8] = b"Hello, world!\r\n";
+const MESSAGE: &[u8] = b"Hello, world!\r\n";
 
 #[no_mangle]
 pub extern "system" fn mainCRTStartup() -> ! {

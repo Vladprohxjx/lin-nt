@@ -379,7 +379,7 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	    image_base < PAGE_SIZE ||
 	    check_add_overflow(image_base, (unsigned long)opt.image_size,
 			       &image_end) ||
-	    image_end >= TASK_SIZE) {
+	    image_end >= TASK_SIZE_MAX) {
 		ret = -ENOEXEC;
 		goto out;
 	}

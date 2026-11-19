@@ -40,7 +40,9 @@ scripts/config --enable BINFMT_PE \
     --enable DRM \
     --enable FB \
     --enable DEVTMPFS \
-    --enable DEVTMPFS_MOUNT
+    --enable DEVTMPFS_MOUNT \
+    --enable SERIAL_8250 \
+    --enable SERIAL_8250_CONSOLE
 make olddefconfig
 make -j"$(nproc)" bzImage
 

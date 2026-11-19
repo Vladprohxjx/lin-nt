@@ -54,12 +54,6 @@ for applet in sh mount mkdir echo cat ls ps dmesg; do
     ln -sf busybox "$ROOTFS/bin/$applet"
 done
 
-cp target/x86_64-pc-windows-gnu/release/ntdll.dll \
-    "$ROOTFS/windows/system32/ntdll.dll"
-cp target/x86_64-pc-windows-gnu/release/kernel32.dll \
-    "$ROOTFS/windows/system32/kernel32.dll"
-cp target/x86_64-pc-windows-gnu/release/user32.dll \
-    "$ROOTFS/windows/system32/user32.dll"
 cp target/x86_64-pc-windows-gnu/release/win_demo.exe \
     "$ROOTFS/windows/hello_world.exe"
 

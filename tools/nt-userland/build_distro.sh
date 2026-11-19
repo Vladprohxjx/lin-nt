@@ -39,7 +39,8 @@ scripts/config --enable BINFMT_PE \
     --enable NTSYNC \
     --enable DRM \
     --enable FB \
-    --enable DEVTMPFS
+    --enable DEVTMPFS \
+    --enable DEVTMPFS_MOUNT
 make olddefconfig
 make -j"$(nproc)" bzImage
 
@@ -64,7 +65,6 @@ cat > "$ROOTFS/init" <<'INIT'
 #!/bin/sh
 /bin/mount -t proc proc /proc
 /bin/mount -t sysfs sysfs /sys
-/bin/mount -t devtmpfs devtmpfs /dev
 echo "Linux NT hybrid kernel initramfs"
 echo "Try /windows/hello_world.exe for the static PE32+ smoke test."
 exec /bin/sh

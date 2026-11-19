@@ -1825,7 +1825,7 @@ extern struct pid __rcu *cad_pid;
 #define PF_KTHREAD		0x00200000	/* I am a kernel thread */
 #define PF_RANDOMIZE		0x00400000	/* Randomize virtual address space */
 #define PF_NO_NOTIFY_SIGNAL	0x00800000	/* see no_notify_signal_save() */
-#define PF__HOLE__01000000	0x01000000
+#define PF_WINDOWS_NT		0x01000000	/* Task uses the Windows NT user ABI */
 #define PF__HOLE__02000000	0x02000000
 #define PF_NO_SETAFFINITY	0x04000000	/* Userland is not allowed to meddle with cpus_mask */
 #define PF_MCE_EARLY		0x08000000      /* Early kill for mce process policy */
@@ -1861,6 +1861,8 @@ extern struct pid __rcu *cad_pid;
 
 /* NOTE: this will return 0 or PF_USED_MATH, it will never return 1 */
 #define tsk_used_math(p)			((p)->flags & PF_USED_MATH)
+
+#define task_is_windows_nt(p)			(!!((p)->flags & PF_WINDOWS_NT))
 #define used_math()				tsk_used_math(current)
 
 static __always_inline bool is_percpu_thread(void)

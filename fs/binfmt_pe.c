@@ -35,7 +35,7 @@ static int pe_read(struct file *file, void *buf, size_t size, u64 offset)
 
 	if (n < 0)
 		return n;
-	return n == size ? 0 : -ENOEXEC;
+	return n == (ssize_t)size ? 0 : -ENOEXEC;
 }
 
 static int pe_validate_sections(struct file *file, u64 file_size,

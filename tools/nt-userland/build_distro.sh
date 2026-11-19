@@ -17,9 +17,7 @@ if [[ -z "$BUSYBOX" || ! -x "$BUSYBOX" ]]; then
     exit 1
 fi
 
-if ldd "$BUSYBOX" 2>&1 | grep -q 'not a dynamic executable'; then
-    :
-else
+if readelf -l "$BUSYBOX" | grep -q 'INTERP'; then
     echo "BusyBox must be statically linked: $BUSYBOX" >&2
     exit 1
 fi

@@ -8,6 +8,7 @@
  * only when their argument marshalling and object semantics are implemented.
  */
 
+#include <linux/kernel.h>
 #include <linux/ntsyscall.h>
 #include <linux/ptrace.h>
 #include <linux/types.h>

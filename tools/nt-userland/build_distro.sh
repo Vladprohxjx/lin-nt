@@ -17,12 +17,12 @@ if [[ -z "$BUSYBOX" || ! -x "$BUSYBOX" ]]; then
     exit 1
 fi
 
+command -v readelf >/dev/null
 if readelf -l "$BUSYBOX" | grep -q 'INTERP'; then
     echo "BusyBox must be statically linked: $BUSYBOX" >&2
     exit 1
 fi
 
-command -v readelf >/dev/null
 command -v x86_64-w64-mingw32-gcc >/dev/null
 command -v qemu-system-x86_64 >/dev/null
 command -v cpio >/dev/null

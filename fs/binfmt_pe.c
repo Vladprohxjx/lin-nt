@@ -10,6 +10,8 @@
 #include <linux/binfmts.h>
 #include <linux/errno.h>
 #include <linux/fs.h>
+#include <linux/kernel.h>
+#include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/overflow.h>
 #include <linux/pe.h>
@@ -58,12 +60,22 @@ static int pe_validate_sections(struct file *file, u64 file_size,
 
 		extent = max_t(u32, sections[i].virtual_size,
 			       sections[i].raw_data_size);
-		if (extent &&
-		    (check_add_overflow((u64)sections[i].virtual_address,
-					extent, &virtual_end) ||
-		     virtual_end > opt->image_size)) {
-			ret = -ENOEXEC;
-			goto out;
+		if (extent) {
+			u64 aligned_extent;
+
+			if (check_add_overflow(extent,
+					       (u64)opt->section_align - 1,
+					       &aligned_extent)) {
+				ret = -ENOEXEC;
+				goto out;
+			}
+			aligned_extent &= ~((u64)opt->section_align - 1);
+			if (check_add_overflow((u64)sections[i].virtual_address,
+					       aligned_extent, &virtual_end) ||
+			    virtual_end > opt->image_size) {
+				ret = -ENOEXEC;
+				goto out;
+			}
 		}
 
 		if (sections[i].virtual_address < opt->header_size ||
@@ -89,12 +101,19 @@ static int pe_validate_sections(struct file *file, u64 file_size,
 		for (j = 0; j < i; j++) {
 			u64 prev_extent = max_t(u32, sections[j].virtual_size,
 						sections[j].raw_data_size);
-			u64 prev_end;
+			u64 prev_end, aligned_prev_extent;
 
 			if (!extent || !prev_extent)
 				continue;
+			if (check_add_overflow(prev_extent,
+					       (u64)opt->section_align - 1,
+					       &aligned_prev_extent)) {
+				ret = -ENOEXEC;
+				goto out;
+			}
+			aligned_prev_extent &= ~((u64)opt->section_align - 1);
 			if (check_add_overflow((u64)sections[j].virtual_address,
-					       prev_extent, &prev_end) ||
+					       aligned_prev_extent, &prev_end) ||
 			    (sections[i].virtual_address < prev_end &&
 			     sections[j].virtual_address < virtual_end)) {
 				ret = -ENOEXEC;

@@ -13,7 +13,6 @@
 #include <linux/fs.h>
 #include <linux/sched/signal.h>
 #include <linux/sched/task.h>
-#include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/ntsyscall.h>
 #include <linux/nospec.h>
@@ -36,7 +35,6 @@ static u32 nt_syscall_write_console(struct pt_regs *regs)
 {
 	struct fd f;
 	struct file *file;
-	void *buffer;
 	size_t len = regs->r8;
 	loff_t pos = 0;
 	ssize_t written;
@@ -55,14 +53,8 @@ static u32 nt_syscall_write_console(struct pt_regs *regs)
 		return LINUX_NT_STATUS_INVALID_HANDLE;
 	}
 
-	buffer = memdup_user((const void __user *)regs->dx, len);
-	if (IS_ERR(buffer)) {
-		fdput(f);
-		return LINUX_NT_STATUS_ACCESS_VIOLATION;
-	}
-
-	written = kernel_write(file, buffer, len, &pos);
-	kfree(buffer);
+	/* vfs_write performs access_ok() and copies from the caller's buffer. */
+	written = vfs_write(file, (const char __user *)regs->dx, len, &pos);
 	fdput(f);
 
 	return written == len ? LINUX_NT_STATUS_SUCCESS :

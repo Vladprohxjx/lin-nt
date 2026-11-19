@@ -446,6 +446,9 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	set_binfmt(&pe_format);
 	finalize_exec(bprm);
 	regs = current_pt_regs();
+#ifdef ELF_PLAT_INIT
+	ELF_PLAT_INIT(regs, 0);
+#endif
 	start_thread(regs, entry, stack);
 	current->flags |= PF_WINDOWS_NT;
 	ret = 0;

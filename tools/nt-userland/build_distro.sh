@@ -57,6 +57,8 @@ x86_64-w64-mingw32-gcc -nostdlib -nostartfiles \
     -Wl,--disable-dynamicbase \
     -Wl,--disable-high-entropy-va \
     -Wl,--disable-reloc-section \
+    -Wl,--no-seh \
+    -Wl,--no-insert-timestamp \
     "$BUILD/hello_world.o" -o "$BUILD/hello_world.exe"
 
 rm -rf "$ROOTFS"

@@ -11,6 +11,8 @@ Crates:
 - `user32`: a minimal `DrawFrame` syscall wrapper.
 - `win_demo`: a no-CRT PE entry-point smoke-test scaffold.
 
+See [EXECUTION_STATUS.md](EXECUTION_STATUS.md) for the constrained static PE target, loader implementation gates, and the exact future invocation contract. It explicitly distinguishes the planned run command from current capability.
+
 ## Important limitations
 
 The kernel dispatcher currently returns `STATUS_NOT_IMPLEMENTED` for every
@@ -23,6 +25,8 @@ specific syscall numbers. Do not use these DLLs with an unmodified Windows
 kernel or assume binary compatibility with Windows system DLLs.
 
 ## Build and boot scaffold
+
+The initramfs currently provides a Linux BusyBox shell only. There is no working `hello_world.exe` yet; do not try to treat the Rust smoke-test scaffold as runnable.
 
 Install the Rust target with `rustup target add x86_64-pc-windows-gnu`, a
 MinGW-w64 linker, QEMU, cpio, gzip, and a statically linked BusyBox binary.

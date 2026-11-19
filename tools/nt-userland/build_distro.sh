@@ -24,6 +24,7 @@ if readelf -l "$BUSYBOX" | grep -q 'INTERP'; then
 fi
 
 command -v x86_64-w64-mingw32-gcc >/dev/null
+command -v python3 >/dev/null
 command -v qemu-system-x86_64 >/dev/null
 command -v cpio >/dev/null
 command -v gzip >/dev/null
@@ -60,6 +61,7 @@ x86_64-w64-mingw32-gcc -nostdlib -nostartfiles \
     -Wl,--no-seh \
     -Wl,--no-insert-timestamp \
     "$BUILD/hello_world.o" -o "$BUILD/hello_world.exe"
+python3 "$WORK/verify_pe.py" "$BUILD/hello_world.exe"
 
 rm -rf "$ROOTFS"
 mkdir -p "$ROOTFS"/{bin,sbin,dev,proc,sys,tmp,windows}

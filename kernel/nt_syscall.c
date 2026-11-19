@@ -36,27 +36,28 @@ static u32 nt_syscall_write_console(struct pt_regs *regs)
 	struct fd f;
 	struct file *file;
 	size_t len = regs->r8;
-	loff_t pos = 0;
+	loff_t *pos;
 	ssize_t written;
 
 	if (!len || len > PAGE_SIZE || !regs->dx ||
 	    regs->r10 > INT_MAX)
 		return LINUX_NT_STATUS_INVALID_PARAMETER;
 
-	f = fdget((unsigned int)regs->r10);
+	f = fdget_pos((unsigned int)regs->r10);
 	if (fd_empty(f))
 		return LINUX_NT_STATUS_INVALID_HANDLE;
 	file = fd_file(f);
 	if (!(file->f_mode & FMODE_WRITE) ||
 	    !(file->f_mode & FMODE_CAN_WRITE) ||
 	    !S_ISCHR(file_inode(file)->i_mode)) {
-		fdput(f);
+		fdput_pos(f);
 		return LINUX_NT_STATUS_INVALID_HANDLE;
 	}
 
 	/* vfs_write performs access_ok() and copies from the caller's buffer. */
-	written = vfs_write(file, (const char __user *)regs->dx, len, &pos);
-	fdput(f);
+	pos = (file->f_mode & FMODE_STREAM) ? NULL : &file->f_pos;
+	written = vfs_write(file, (const char __user *)regs->dx, len, pos);
+	fdput_pos(f);
 
 	if (written == len)
 		return LINUX_NT_STATUS_SUCCESS;

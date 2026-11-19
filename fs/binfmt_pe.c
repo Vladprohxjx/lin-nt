@@ -132,6 +132,8 @@ static int pe_validate_sections(struct file *file, u64 file_size,
 				}
 			}
 
+			if (!prev_extent)
+				continue;
 			if (check_add_overflow(prev_extent,
 					       (u64)opt->section_align - 1,
 					       &aligned_prev_extent)) {

@@ -41,7 +41,8 @@ static u32 nt_syscall_write_console(struct pt_regs *regs)
 	loff_t pos = 0;
 	ssize_t written;
 
-	if (!len || len > PAGE_SIZE || !regs->dx)
+	if (!len || len > PAGE_SIZE || !regs->dx ||
+	    regs->r10 > INT_MAX)
 		return LINUX_NT_STATUS_INVALID_PARAMETER;
 
 	f = fdget((unsigned int)regs->r10);

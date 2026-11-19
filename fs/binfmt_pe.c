@@ -257,8 +257,17 @@ static int pe_map_image(struct file *file, unsigned long image_base,
 	unsigned long address;
 	unsigned int i;
 
+	/* Reserve the complete image so holes cannot be claimed by later mmaps. */
+	address = vm_mmap(NULL, image_base, opt->image_size, PROT_NONE,
+			  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, 0);
+	if (IS_ERR_VALUE(address))
+		return (long)address;
+	if (address != image_base)
+		return -EEXIST;
+
+	/* Replace only pages in the reservation established above. */
 	address = vm_mmap(file, image_base, opt->header_size, PROT_READ,
-			  MAP_PRIVATE | MAP_FIXED_NOREPLACE, 0);
+			  MAP_PRIVATE | MAP_FIXED, 0);
 	if (IS_ERR_VALUE(address))
 		return (long)address;
 	if (address != image_base)
@@ -276,7 +285,7 @@ static int pe_map_image(struct file *file, unsigned long image_base,
 		if (section->raw_data_size) {
 			mapped = vm_mmap(file, section_addr,
 					 section->raw_data_size, prot,
-					 MAP_PRIVATE | MAP_FIXED_NOREPLACE,
+					 MAP_PRIVATE | MAP_FIXED,
 					 section->data_addr);
 			if (IS_ERR_VALUE(mapped))
 				return (long)mapped;
@@ -295,8 +304,7 @@ static int pe_map_image(struct file *file, unsigned long image_base,
 						  section->raw_data_size;
 
 			mapped = vm_mmap(NULL, tail_addr, tail_size, prot,
-					 MAP_PRIVATE | MAP_ANONYMOUS |
-					 MAP_FIXED_NOREPLACE, 0);
+					 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, 0);
 			if (IS_ERR_VALUE(mapped))
 				return (long)mapped;
 			if (mapped != tail_addr)
@@ -365,6 +373,7 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	    (opt.dll_flags & (IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE |
 			      IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA)) ||
 	    !IS_ALIGNED(opt.image_size, PAGE_SIZE) ||
+	    !IS_ALIGNED(opt.image_size, opt.section_align) ||
 	    !IS_ALIGNED(opt.header_size, PAGE_SIZE))
 		return -ENOEXEC;
 

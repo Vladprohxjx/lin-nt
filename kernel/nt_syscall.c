@@ -28,7 +28,7 @@ static u32 nt_syscall_terminate_process(struct pt_regs *regs)
 	if (regs->r10 != (unsigned long)-1)
 		return LINUX_NT_STATUS_INVALID_HANDLE;
 
-	do_group_exit((int)(regs->dx & 0xff));
+	do_group_exit((int)(regs->dx & 0xff) << 8);
 	return LINUX_NT_STATUS_SUCCESS;
 }
 

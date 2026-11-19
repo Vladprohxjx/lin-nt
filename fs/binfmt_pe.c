@@ -393,6 +393,7 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	ret = begin_new_exec(bprm);
 	if (ret)
 		goto out;
+	set_personality_64bit();
 	setup_new_exec(bprm);
 	ret = setup_arg_pages(bprm, randomize_stack_top(STACK_TOP),
 			      EXSTACK_DISABLE_X);

@@ -19,6 +19,7 @@
 #include <linux/nospec.h>
 #include <linux/types.h>
 #include <uapi/linux/ntsyscall.h>
+#include <asm/ptrace.h>
 
 typedef u32 (*nt_syscall_fn_t)(struct pt_regs *regs);
 

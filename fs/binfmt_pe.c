@@ -348,15 +348,19 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	    opt.subsys != IMAGE_SUBSYSTEM_WINDOWS_CUI ||
 	    !opt.image_size || !opt.header_size ||
 	    opt.header_size > opt.image_size ||
+	    opt.image_size > SZ_1G ||
 	    opt.header_size > file_size || opt.header_size < section_offset +
 	    (u64)pe.sections * sizeof(*sections) ||
 	    !opt.entry_point || opt.entry_point >= opt.image_size ||
 	    !is_power_of_2(opt.section_align) ||
 	    !is_power_of_2(opt.file_align) ||
 	    opt.section_align < PAGE_SIZE ||
+	    opt.section_align > SZ_2M ||
 	    opt.section_align < opt.file_align ||
 	    !IS_ALIGNED(opt.section_align, PAGE_SIZE) ||
 	    opt.file_align != PAGE_SIZE ||
+	    (opt.dll_flags & (IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE |
+			      IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA)) ||
 	    !IS_ALIGNED(opt.image_size, PAGE_SIZE) ||
 	    !IS_ALIGNED(opt.header_size, PAGE_SIZE))
 		return -ENOEXEC;

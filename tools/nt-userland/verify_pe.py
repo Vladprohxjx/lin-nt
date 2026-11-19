@@ -95,7 +95,8 @@ def main(path):
         fail("FileAlignment must equal PAGE_SIZE and not exceed SectionAlignment")
     if not image_size or image_size > MAX_IMAGE or image_size % section_align:
         fail("SizeOfImage is invalid or exceeds 1 GiB")
-    if not headers_size or headers_size > image_size or headers_size % PAGE:
+    if (not headers_size or headers_size > image_size or
+            headers_size > size or headers_size % PAGE):
         fail("SizeOfHeaders must be page-aligned and inside the image")
     if not entry or entry >= image_size:
         fail("AddressOfEntryPoint is outside the image")

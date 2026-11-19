@@ -428,11 +428,11 @@ static int load_pe_binary(struct linux_binprm *bprm)
 		}
 	}
 
-	current->mm->start_code = start_code == ULONG_MAX ? image_base :
-							       start_code;
+	current->mm->start_code = start_code;
 	current->mm->end_code = end_code;
-	current->mm->start_data = start_data == ULONG_MAX ? image_base :
-							       start_data;
+	if (start_data == ULONG_MAX)
+		start_data = end_data = image_end;
+	current->mm->start_data = start_data;
 	current->mm->end_data = end_data;
 	current->mm->start_brk = current->mm->brk = image_end;
 

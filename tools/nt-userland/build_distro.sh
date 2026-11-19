@@ -62,7 +62,7 @@ cp target/x86_64-pc-windows-gnu/release/kernel32.dll \
 cp target/x86_64-pc-windows-gnu/release/user32.dll \
     "$ROOTFS/windows/system32/user32.dll"
 cp target/x86_64-pc-windows-gnu/release/win_demo.exe \
-    "$ROOTFS/windows/win_demo.exe"
+    "$ROOTFS/windows/hello_world.exe"
 
 cat > "$ROOTFS/init" <<'INIT'
 #!/bin/sh

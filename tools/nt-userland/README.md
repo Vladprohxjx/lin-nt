@@ -29,7 +29,7 @@ Windows application compatibility.
 ## Build and run
 
 On an x86-64 Linux host, install the kernel build dependencies, MinGW-w64
-(`x86_64-w64-mingw32-gcc`), QEMU, cpio, gzip, readelf, and a statically linked
+(`x86_64-w64-mingw32-gcc`), QEMU, cpio, gzip, readelf, Python 3, and a statically linked
 BusyBox. Then, from the repository root:
 
 ```sh
@@ -38,7 +38,8 @@ bash tools/nt-userland/build_distro.sh
 ```
 
 The script builds the kernel, assembles and links the minimal PE executable,
-creates an initramfs, and boots QEMU. At the BusyBox shell run:
+checks its headers and sections with `verify_pe.py`, creates an initramfs, and
+boots QEMU. At the BusyBox shell run:
 
 ```sh
 /windows/hello_world.exe

@@ -401,6 +401,9 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	if (ret)
 		goto out;
 	set_personality_64bit();
+	if (!(current->personality & ADDR_NO_RANDOMIZE) &&
+	    READ_ONCE(randomize_va_space))
+		current->flags |= PF_RANDOMIZE;
 	setup_new_exec(bprm);
 	ret = setup_arg_pages(bprm, randomize_stack_top(STACK_TOP),
 			      EXSTACK_DISABLE_X);

@@ -1,11 +1,12 @@
 # Experimental Linux NT userland
 
-This workspace targets `x86_64-pc-windows-gnu` and the project-local NT ABI
-in `include/uapi/linux/ntsyscall.h`. It is not binary-compatible with Windows.
+The project-local NT ABI is documented in `include/uapi/linux/ntsyscall.h`.
+It is intentionally not binary-compatible with Microsoft's build-specific
+Windows syscall tables or Windows system DLLs.
 
 ## Current Hello World profile
 
-The kernel now contains a deliberately constrained fixed-base PE32+ loader and
+The kernel contains a deliberately constrained fixed-base PE32+ loader and
 two minimal NT services used by the freestanding `hello_world.exe`:
 
 - `NtWriteConsole`: writes up to one page to a writable character-device fd.
@@ -14,30 +15,30 @@ two minimal NT services used by the freestanding `hello_world.exe`:
   image base, maps zero-filled virtual tails, creates a Windows-x64-aligned
   entry stack, and transfers control to the PE entry point.
 
-The executable is intentionally no-CRT and does not load Windows DLLs. It writes
-`Hello, world!` to fd 1 and exits. The loader rejects imports, relocations,
-TLS, exception/unwind metadata, CLR, dynamic-base images, GUI images, W+X
-sections, non-page-aligned file layouts, and images larger than 1 GiB.
+The first executable is assembled from `win_demo/hello_world.S`. It has no CRT,
+imports, TLS, stack frame, or unwind metadata. It writes `Hello, world!` to
+fd 1 and exits. The loader rejects imports, relocations, TLS, exception/unwind
+metadata, CLR, dynamic-base images, GUI images, W+X sections, non-page-aligned
+file layouts, and images larger than 1 GiB.
 
-This is source-level implementation only: no kernel build, Rust compilation,
-or QEMU execution has been performed. The first run is therefore still
-unverified, and the restricted profile must not be mistaken for general
+This is source-level implementation only: no kernel build, assembler/linker
+invocation, or QEMU execution has been performed. The first run is therefore
+still unverified, and the restricted profile must not be mistaken for general
 Windows application compatibility.
 
 ## Build and run
 
-On an x86-64 Linux host, install the kernel build dependencies, Rust, the
-Windows GNU Rust target, MinGW-w64, QEMU, cpio, gzip, readelf, and a statically
-linked BusyBox. Then, from the repository root:
+On an x86-64 Linux host, install the kernel build dependencies, MinGW-w64
+(`x86_64-w64-mingw32-gcc`), QEMU, cpio, gzip, readelf, and a statically linked
+BusyBox. Then, from the repository root:
 
 ```sh
-rustup target add x86_64-pc-windows-gnu
 export BUSYBOX=/absolute/path/to/static/busybox
 bash tools/nt-userland/build_distro.sh
 ```
 
-The script builds the kernel and the PE program, creates an initramfs, and
-boots QEMU. At the BusyBox shell run:
+The script builds the kernel, assembles and links the minimal PE executable,
+creates an initramfs, and boots QEMU. At the BusyBox shell run:
 
 ```sh
 /windows/hello_world.exe
@@ -56,10 +57,11 @@ rejects most normal Windows executables.
 
 ## Other workspace crates
 
-- `ntdll`: minimal wrappers for the project-local syscall ABI.
+- `ntdll`: minimal Rust wrappers for the project-local syscall ABI.
 - `kernel32`: small `GetCurrentProcess` and `CloseHandle` wrappers.
 - `user32`: experimental frame syscall wrapper.
-- `win_demo`: the no-CRT Hello World PE entry point.
+- `win_demo/src/main.rs`: an alternative Rust no-CRT entry-point experiment;
+  the build script uses the assembly version to avoid CRT and unwind metadata.
 
-The DLL crates are scaffolding; the first Hello World executable has no import
-table and does not depend on them.
+These crates are scaffolding; the first Hello World executable has no import
+table and does not depend on Windows system DLLs.

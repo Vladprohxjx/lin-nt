@@ -21,6 +21,7 @@
 #include <linux/slab.h>
 #include <linux/sizes.h>
 #include <linux/uaccess.h>
+#include <asm/elf.h>
 #include <asm/page.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>

@@ -62,7 +62,7 @@ static u32 nt_syscall_write_console(struct pt_regs *regs)
 	written = vfs_write(file, (const char __user *)regs->dx, len, pos);
 	fdput_pos(f);
 
-	if (written == len)
+	if (written >= 0 && (size_t)written == len)
 		return LINUX_NT_STATUS_SUCCESS;
 	if (written == -EFAULT)
 		return LINUX_NT_STATUS_ACCESS_VIOLATION;

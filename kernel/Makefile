@@ -1,4 +1,3 @@
-obj-$(CONFIG_BINFMT_PE) += nt_syscall.o
 # SPDX-License-Identifier: GPL-2.0
 #
 # Makefile for the linux kernel.
@@ -12,6 +11,8 @@ obj-y     = fork.o exec_domain.o exec_state.o panic.o \
 	    kthread.o sys_ni.o nsproxy.o nstree.o nscommon.o \
 	    notifier.o ksysfs.o cred.o reboot.o \
 	    async.o range.o smpboot.o ucount.o regset.o ksyms_common.o
+
+obj-$(CONFIG_BINFMT_PE) += nt_syscall.o
 
 obj-$(CONFIG_MULTIUSER) += groups.o
 obj-$(CONFIG_VHOST_TASK) += vhost_task.o

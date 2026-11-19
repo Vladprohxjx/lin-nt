@@ -21,7 +21,8 @@ The repository now has a first, deliberately restricted PE execution path:
      and write to a writable character device;
    - service 6, `NtTerminateProcess(-1, exit_code)`: terminate the current
      process and return to the parent shell.
-7. `win_demo` is a freestanding no-CRT PE entry point that writes
+7. `win_demo/hello_world.S` is a freestanding AMD64 entry point with no CRT,
+   imports, TLS, stack frame, or unwind metadata. It writes
    `Hello, world!\r\n` to fd 1 and exits. The initramfs stages it as
    `/windows/hello_world.exe`.
 
@@ -47,17 +48,17 @@ pretending to provide missing NT runtime structures would be unsafe.
 
 ## Build and run
 
-On an x86-64 Linux build host with kernel build dependencies, Rust, MinGW-w64,
-QEMU, cpio, gzip, readelf, and a statically linked BusyBox:
+On an x86-64 Linux build host with kernel build dependencies, MinGW-w64
+(`x86_64-w64-mingw32-gcc`), QEMU, cpio, gzip, readelf, and a statically
+linked BusyBox:
 
 ```sh
-rustup target add x86_64-pc-windows-gnu
 export BUSYBOX=/absolute/path/to/static/busybox
 bash tools/nt-userland/build_distro.sh
 ```
 
-The script builds the kernel and PE target, creates the initramfs, and starts
-QEMU. At the BusyBox shell:
+The script builds the kernel, assembles and links the PE target, creates the
+initramfs, and starts QEMU. At the BusyBox shell:
 
 ```sh
 /windows/hello_world.exe

@@ -2,8 +2,10 @@
 /* 64-bit system call dispatch */
 
 #include <linux/linkage.h>
+#ifdef CONFIG_BINFMT_PE
 #include <linux/ntsyscall.h>
 #include <linux/sched.h>
+#endif
 #include <linux/sys.h>
 #include <linux/cache.h>
 #include <linux/syscalls.h>
@@ -88,9 +90,12 @@ __visible noinstr bool do_syscall_64(struct pt_regs *regs, long nr)
 	if (likely(syscall_enter_from_user_mode_randomize_stack(regs, &nr))) {
 		instrumentation_begin();
 
+		#ifdef CONFIG_BINFMT_PE
 		if (task_is_windows_nt(current)) {
 			regs->ax = do_nt_syscall(regs, nr);
-		} else if (unlikely(!do_syscall_x64(regs, nr))) {
+		} else
+		#endif
+		if (unlikely(!do_syscall_x64(regs, nr))) {
 			/*
 			 * The special treatment of syscall number -1 is a
 			 * historical bogosity as the original code used -1 to

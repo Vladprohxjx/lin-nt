@@ -25,6 +25,8 @@
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 
+static struct linux_binfmt pe_format;
+
 static int pe_read(struct file *file, void *buf, size_t size, u64 offset)
 {
 	loff_t pos = offset;
@@ -352,15 +354,13 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	    !is_power_of_2(opt.section_align) ||
 	    !is_power_of_2(opt.file_align) ||
 	    opt.section_align < PAGE_SIZE ||
+	    opt.section_align < opt.file_align ||
 	    !IS_ALIGNED(opt.section_align, PAGE_SIZE) ||
 	    opt.file_align != PAGE_SIZE ||
 	    !IS_ALIGNED(opt.image_size, PAGE_SIZE) ||
 	    !IS_ALIGNED(opt.header_size, PAGE_SIZE))
 		return -ENOEXEC;
 
-	if (check_add_overflow((u64)optional_offset,
-			       (u64)sizeof(opt), &section_offset))
-		return -ENOEXEC;
 	ret = pe_validate_sections(bprm->file, file_size, &pe, &opt,
 				   section_offset, &sections);
 	if (ret)

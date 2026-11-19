@@ -167,17 +167,20 @@ static int pe_validate_directories(struct file *file,
 				   u64 optional_offset)
 {
 	struct data_dirent dir;
-	u64 available, offset, end;
+	u64 available, dir_offset, offset, end;
 	unsigned int i;
 
 	available = pe->opt_hdr_size - sizeof(*opt);
+	if (check_add_overflow(optional_offset, (u64)sizeof(*opt),
+			       &dir_offset))
+		return -ENOEXEC;
 	if (opt->data_dirs > available / sizeof(dir) ||
 	    opt->data_dirs > sizeof(struct data_directory) / sizeof(dir))
 		return -ENOEXEC;
 
 	for (i = 0; i < opt->data_dirs; i++) {
-		if (check_add_overflow(optional_offset + sizeof(*opt),
-				       (u64)i * sizeof(dir), &offset))
+		if (check_add_overflow(dir_offset, (u64)i * sizeof(dir),
+				       &offset))
 			return -ENOEXEC;
 		if (pe_read(file, &dir, sizeof(dir), offset))
 			return -ENOEXEC;
@@ -261,7 +264,8 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	if (opt.section_align < PAGE_SIZE) {
 		if (opt.section_align != opt.file_align)
 			return -ENOEXEC;
-	} else if (opt.file_align < 512) {
+	} else if (opt.file_align < 512 ||
+		   opt.file_align > opt.section_align) {
 		return -ENOEXEC;
 	}
 

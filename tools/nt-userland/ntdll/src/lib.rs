@@ -6,6 +6,8 @@ use core::ffi::c_void;
 const LINUX_NT_SYS_NT_CLOSE: u64 = 5;
 const LINUX_NT_SYS_NT_QUERY_SYSTEM_INFORMATION: u64 = 7;
 const LINUX_NT_SYS_NT_USER_DRAW_FRAME: u64 = 8;
+const LINUX_NT_SYS_NT_WRITE_CONSOLE: u64 = 9;
+const LINUX_NT_SYS_NT_TERMINATE_PROCESS: u64 = 6;
 
 #[inline(always)]
 unsafe fn nt_syscall4(number: u64, a1: usize, a2: usize,
@@ -62,6 +64,45 @@ pub unsafe extern "system" fn NtUserDrawFrame(
         height as usize,
         stride as usize,
     )
+}
+
+
+#[no_mangle]
+pub unsafe extern "system" fn NtWriteConsole(
+    fd: usize,
+    buffer: *const u8,
+    length: usize,
+) -> u32 {
+    let result: u64;
+    asm!(
+        "syscall",
+        inlateout("rax") LINUX_NT_SYS_NT_WRITE_CONSOLE => result,
+        in("r10") fd,
+        in("rdx") buffer,
+        in("r8") length,
+        lateout("rcx") _,
+        lateout("r11") _,
+        options(nostack),
+    );
+    result as u32
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn NtTerminateProcess(
+    process: usize,
+    exit_status: u32,
+) -> u32 {
+    let result: u64;
+    asm!(
+        "syscall",
+        inlateout("rax") LINUX_NT_SYS_NT_TERMINATE_PROCESS => result,
+        in("r10") process,
+        in("rdx") exit_status as usize,
+        lateout("rcx") _,
+        lateout("r11") _,
+        options(nostack),
+    );
+    result as u32
 }
 
 #[panic_handler]

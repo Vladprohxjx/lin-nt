@@ -1,39 +1,65 @@
 # Experimental Linux NT userland
 
-This workspace targets `x86_64-pc-windows-gnu` and is a bring-up scaffold for
-the project-local NT ABI documented in `include/uapi/linux/ntsyscall.h`.
+This workspace targets `x86_64-pc-windows-gnu` and the project-local NT ABI
+in `include/uapi/linux/ntsyscall.h`. It is not binary-compatible with Windows.
 
-Crates:
+## Current Hello World profile
 
-- `ntdll`: minimal `NtClose`, `NtQuerySystemInformation` and
-  `NtUserDrawFrame` syscall stubs.
-- `kernel32`: minimal `GetCurrentProcess` and `CloseHandle` wrappers.
-- `user32`: a minimal `DrawFrame` syscall wrapper.
-- `win_demo`: a no-CRT PE entry-point smoke-test scaffold.
+The kernel now contains a deliberately constrained fixed-base PE32+ loader and
+two minimal NT services used by the freestanding `hello_world.exe`:
 
-See [EXECUTION_STATUS.md](EXECUTION_STATUS.md) for the constrained static PE target, loader implementation gates, and the exact future invocation contract. It explicitly distinguishes the planned run command from current capability.
+- `NtWriteConsole`: writes up to one page to a writable character-device fd.
+- `NtTerminateProcess`: exits the current process using pseudo-handle -1.
+- PE loader: maps read-only headers and page-aligned sections at their preferred
+  image base, maps zero-filled virtual tails, creates a Windows-x64-aligned
+  entry stack, and transfers control to the PE entry point.
 
-## Important limitations
+The executable is intentionally no-CRT and does not load Windows DLLs. It writes
+`Hello, world!` to fd 1 and exits. The loader rejects imports, relocations,
+TLS, exception/unwind metadata, CLR, dynamic-base images, GUI images, W+X
+sections, non-page-aligned file layouts, and images larger than 1 GiB.
 
-The kernel dispatcher currently returns `STATUS_NOT_IMPLEMENTED` for every
-service. The PE binfmt currently validates PE32+ metadata and deliberately
-returns `-ENOEXEC`; it does not map or execute images. Consequently these
-artifacts are ABI scaffolding only and are not runnable yet.
+This is source-level implementation only: no kernel build, Rust compilation,
+or QEMU execution has been performed. The first run is therefore still
+unverified, and the restricted profile must not be mistaken for general
+Windows application compatibility.
 
-The ABI uses project-local service numbers, not Microsoft's Windows build-
-specific syscall numbers. Do not use these DLLs with an unmodified Windows
-kernel or assume binary compatibility with Windows system DLLs.
+## Build and run
 
-## Build and boot scaffold
+On an x86-64 Linux host, install the kernel build dependencies, Rust, the
+Windows GNU Rust target, MinGW-w64, QEMU, cpio, gzip, readelf, and a statically
+linked BusyBox. Then, from the repository root:
 
-The initramfs currently provides a Linux BusyBox shell only. There is no working `hello_world.exe` yet; do not try to treat the Rust smoke-test scaffold as runnable.
+```sh
+rustup target add x86_64-pc-windows-gnu
+export BUSYBOX=/absolute/path/to/static/busybox
+bash tools/nt-userland/build_distro.sh
+```
 
-Install the Rust target with `rustup target add x86_64-pc-windows-gnu`, a
-MinGW-w64 linker, QEMU, cpio, gzip, and a statically linked BusyBox binary.
-Then set `BUSYBOX=/absolute/path/to/busybox` and run
-`bash tools/nt-userland/build_distro.sh` from the repository root.
+The script builds the kernel and the PE program, creates an initramfs, and
+boots QEMU. At the BusyBox shell run:
 
-The script is provided for later bring-up and has not been run as part of this
-source-only change. It builds the kernel and Rust artifacts, creates a minimal
-initramfs, and launches QEMU; it does not imply that PE execution is currently
-functional.
+```sh
+/windows/hello_world.exe
+```
+
+Expected output:
+
+```text
+Hello, world!
+```
+
+A successful run should return to the shell with exit status zero. If the
+loader rejects the image, inspect `dmesg` and the PE optional header / section
+alignment with `objdump -p` and `objdump -h`. The current loader intentionally
+rejects most normal Windows executables.
+
+## Other workspace crates
+
+- `ntdll`: minimal wrappers for the project-local syscall ABI.
+- `kernel32`: small `GetCurrentProcess` and `CloseHandle` wrappers.
+- `user32`: experimental frame syscall wrapper.
+- `win_demo`: the no-CRT Hello World PE entry point.
+
+The DLL crates are scaffolding; the first Hello World executable has no import
+table and does not depend on them.

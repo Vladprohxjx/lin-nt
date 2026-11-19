@@ -46,7 +46,7 @@ CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="-C force-unwind-tables=no -C link-
     cargo build --release -p win_demo
 
 rm -rf "$ROOTFS"
-mkdir -p "$ROOTFS"/{bin,sbin,dev,proc,sys,tmp,windows/system32}
+mkdir -p "$ROOTFS"/{bin,sbin,dev,proc,sys,tmp,windows}
 cp "$BUSYBOX" "$ROOTFS/bin/busybox"
 chmod 0755 "$ROOTFS/bin/busybox"
 

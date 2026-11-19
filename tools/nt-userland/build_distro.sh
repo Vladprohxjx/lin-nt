@@ -22,7 +22,6 @@ if readelf -l "$BUSYBOX" | grep -q 'INTERP'; then
     exit 1
 fi
 
-command -v cargo >/dev/null
 command -v readelf >/dev/null
 command -v x86_64-w64-mingw32-gcc >/dev/null
 command -v qemu-system-x86_64 >/dev/null

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Minimal fixed-base PE32+ loader for the experimental Linux NT ABI.
+ * Minimal PE32+ loader for the experimental Linux NT ABI.
  *
- * The first execution profile is intentionally narrow: AMD64 Windows CUI
- * images with page-aligned file layout, no imports, no TLS, no exception
- * directory, no relocations and no CLR runtime.  This is sufficient for a
- * freestanding entry point that uses the project-local NT syscall ABI.
+ * The execution profile is intentionally narrow: AMD64 Windows CUI images
+ * with sub-page FileAlignment support, no imports, TLS, exception directory,
+ * or CLR runtime. DIR64 relocation blocks are validated, but images are
+ * loaded only at their preferred base. This is sufficient for a freestanding
+ * entry point that uses the project-local NT syscall ABI.
  */
 #include <linux/binfmts.h>
 #include <linux/errno.h>
@@ -101,11 +102,8 @@ static int pe_validate_sections(struct file *file, u64 file_size,
 			}
 		}
 
-		/* The first loader requires page-granular, W^X section mappings. */
+		/* Sections are page-mapped; raw file offsets use FileAlignment. */
 		if (!IS_ALIGNED(sections[i].virtual_address, PAGE_SIZE) ||
-		    (sections[i].raw_data_size &&
-		     (!IS_ALIGNED(sections[i].data_addr, PAGE_SIZE) ||
-		      !IS_ALIGNED(sections[i].raw_data_size, PAGE_SIZE))) ||
 		    ((sections[i].flags & IMAGE_SCN_MEM_WRITE) &&
 		     (sections[i].flags & IMAGE_SCN_MEM_EXECUTE))) {
 			ret = -ENOEXEC;
@@ -180,6 +178,95 @@ out:
 	return ret;
 }
 
+static int pe_read_directory(struct file *file,
+				 const struct pe_hdr *pe,
+				 const struct pe32plus_opt_hdr *opt,
+				 u64 optional_offset, unsigned int index,
+				 struct data_dirent *dir)
+{
+	u64 offset;
+
+	if (index >= opt->data_dirs ||
+	    opt->data_dirs > (pe->opt_hdr_size - sizeof(*opt)) /
+			     sizeof(*dir))
+		return -ENOENT;
+	if (check_add_overflow(optional_offset, (u64)sizeof(*opt), &offset) ||
+	    check_add_overflow(offset, (u64)index * sizeof(*dir), &offset))
+		return -ENOEXEC;
+	return pe_read(file, dir, sizeof(*dir), offset);
+}
+
+static int pe_apply_relocations(unsigned long image_base,
+				const struct pe32plus_opt_hdr *opt,
+				const struct data_dirent *relocs)
+{
+	unsigned long cursor = relocs->virtual_address;
+	unsigned long end;
+	s64 delta = (s64)image_base - (s64)opt->image_base;
+
+	if (!relocs->virtual_address && !relocs->size)
+		return delta ? -ENOEXEC : 0;
+	if (!relocs->virtual_address || !relocs->size ||
+	    check_add_overflow(cursor, (unsigned long)relocs->size, &end) ||
+	    end > opt->image_size)
+		return -ENOEXEC;
+
+	while (cursor < end) {
+		struct {
+			u32 page_rva;
+			u32 block_size;
+		} block;
+		unsigned long block_end;
+		u32 count, i;
+
+		if (end - cursor < sizeof(block) ||
+		    copy_from_user(&block, (void __user *)(image_base + cursor),
+				   sizeof(block)))
+			return -ENOEXEC;
+		if (block.block_size < sizeof(block) ||
+		    !IS_ALIGNED(block.page_rva, PAGE_SIZE) ||
+		    (block.block_size & 1) ||
+		    check_add_overflow(cursor, (unsigned long)block.block_size,
+				       &block_end) ||
+		    block_end > end || block.page_rva >= opt->image_size)
+			return -ENOEXEC;
+
+		count = (block.block_size - sizeof(block)) / sizeof(u16);
+		for (i = 0; i < count; i++) {
+			u16 item;
+			u32 type, offset;
+			u64 target, value, relocated;
+
+			if (get_user(item, (u16 __user *)(image_base + cursor +
+						 sizeof(block) + i * sizeof(item))))
+				return -EFAULT;
+			type = item >> 12;
+			offset = item & 0x0fff;
+			if (type == 0) /* IMAGE_REL_BASED_ABSOLUTE */
+				continue;
+			if (type != 10 || /* IMAGE_REL_BASED_DIR64 */
+			    check_add_overflow((u64)block.page_rva,
+					       (u64)offset, &target) ||
+			    target > opt->image_size - sizeof(u64))
+				return -ENOEXEC;
+
+			if (get_user(value, (u64 __user *)(image_base + target)))
+				return -EFAULT;
+			if (delta >= 0) {
+				if (check_add_overflow(value, (u64)delta, &relocated))
+					return -ENOEXEC;
+			} else {
+				if (check_sub_overflow(value, (u64)-delta, &relocated))
+					return -ENOEXEC;
+			}
+			if (put_user(relocated, (u64 __user *)(image_base + target)))
+				return -EFAULT;
+		}
+		cursor = block_end;
+	}
+	return cursor == end ? 0 : -ENOEXEC;
+}
+
 static int pe_validate_directories(struct file *file,
 				   const struct pe_hdr *pe,
 				   const struct pe32plus_opt_hdr *opt,
@@ -206,11 +293,11 @@ static int pe_validate_directories(struct file *file,
 		if (!dir.virtual_address || !dir.size)
 			return -ENOEXEC;
 
-		/* No imports, x64 unwind metadata, relocations, TLS, or CLR yet. */
+		/* Imports, TLS, and CLR are not implemented. Exception metadata
+		 * is mapped as read-only image data; no unwinder is registered.
+		 */
 		switch (i) {
 		case 1:  /* imports */
-		case 3:  /* exception directory */
-		case 5:  /* base relocations */
 		case 9:  /* TLS */
 		case 10: /* load config / CFG */
 		case 11: /* bound imports */
@@ -219,6 +306,9 @@ static int pe_validate_directories(struct file *file,
 		case 14: /* CLR */
 			return -ENOEXEC;
 		}
+
+		if (i == 3 && (dir.size % 12 || !IS_ALIGNED(dir.virtual_address, 4)))
+			return -ENOEXEC;
 
 		/* The certificate directory uses a file offset, not an RVA. */
 		if (i == 4) {
@@ -249,67 +339,110 @@ static unsigned long pe_section_prot(const struct section_header *section)
 	return prot;
 }
 
-static int pe_map_image(struct file *file, unsigned long image_base,
+static int pe_copy_file_to_user(struct file *file, unsigned long dst,
+				u64 offset, size_t size)
+{
+	void *buffer;
+	int ret = 0;
+
+	buffer = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!buffer)
+		return -ENOMEM;
+
+	while (size) {
+		size_t chunk = min_t(size_t, size, PAGE_SIZE);
+
+		ret = pe_read(file, buffer, chunk, offset);
+		if (ret)
+			break;
+		if (copy_to_user((void __user *)dst, buffer, chunk)) {
+			ret = -EFAULT;
+			break;
+		}
+		dst += chunk;
+		offset += chunk;
+		size -= chunk;
+	}
+	kfree(buffer);
+	return ret;
+}
+
+static int pe_map_image(struct file *file, unsigned long preferred_base,
+			unsigned long *mapped_base,
 			const struct pe32plus_opt_hdr *opt,
 			const struct section_header *sections,
-			unsigned int nr_sections)
+			unsigned int nr_sections,
+			const struct data_dirent *relocs)
 {
 	unsigned long address;
 	unsigned int i;
+	int ret;
 
-	/* Reserve the complete image so holes cannot be claimed by later mmaps. */
-	address = vm_mmap(NULL, image_base, opt->image_size, PROT_NONE,
+	/*
+	 * Stage the image in anonymous writable pages.  PE FileAlignment is
+	 * commonly 512 bytes, while mmap file offsets must be page-aligned.
+	 * Copying raw data also keeps file padding out of the image.
+	 */
+	address = vm_mmap(NULL, preferred_base, opt->image_size,
+			  PROT_READ | PROT_WRITE,
 			  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, 0);
-	if (IS_ERR_VALUE(address))
-		return (long)address;
-	if (address != image_base)
-		return -EEXIST;
+	if (IS_ERR_VALUE(address)) {
+		if ((long)address != -EEXIST ||
+		    (!relocs->virtual_address && !relocs->size))
+			return (long)address;
+		/* A relocatable image may be placed at another free address. */
+		address = vm_mmap(NULL, 0, opt->image_size,
+				  PROT_READ | PROT_WRITE,
+				  MAP_PRIVATE | MAP_ANONYMOUS, 0);
+		if (IS_ERR_VALUE(address))
+			return (long)address;
+	}
+	if (address >= TASK_SIZE_MAX ||
+	    opt->image_size > TASK_SIZE_MAX - address)
+		return -ENOMEM;
+	*mapped_base = address;
 
-	/* Replace only pages in the reservation established above. */
-	address = vm_mmap(file, image_base, opt->header_size, PROT_READ,
-			  MAP_PRIVATE | MAP_FIXED, 0);
-	if (IS_ERR_VALUE(address))
-		return (long)address;
-	if (address != image_base)
-		return -EEXIST;
+	ret = pe_copy_file_to_user(file, address, 0, opt->header_size);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < nr_sections; i++) {
+		const struct section_header *section = &sections[i];
+
+		if (!section->raw_data_size)
+			continue;
+		ret = pe_copy_file_to_user(file,
+				address + section->virtual_address,
+				section->data_addr, section->raw_data_size);
+		if (ret)
+			return ret;
+	}
+
+	ret = pe_apply_relocations(address, opt, relocs);
+	if (ret)
+		return ret;
+
+	/* Restore W^X and leave unmapped PE gaps inaccessible. */
+	ret = vm_mprotect(address, opt->image_size, PROT_NONE);
+	if (ret)
+		return ret;
+	ret = vm_mprotect(address, PAGE_ALIGN(opt->header_size), PROT_READ);
+	if (ret)
+		return ret;
 
 	for (i = 0; i < nr_sections; i++) {
 		const struct section_header *section = &sections[i];
 		unsigned long extent = max(section->virtual_size,
 					   section->raw_data_size);
-		unsigned long section_addr = image_base +
+		unsigned long section_addr = address +
 					     section->virtual_address;
-		unsigned long prot = pe_section_prot(section);
-		unsigned long mapped;
 
-		if (section->raw_data_size) {
-			mapped = vm_mmap(file, section_addr,
-					 section->raw_data_size, prot,
-					 MAP_PRIVATE | MAP_FIXED,
-					 section->data_addr);
-			if (IS_ERR_VALUE(mapped))
-				return (long)mapped;
-			if (mapped != section_addr)
-				return -EEXIST;
-		}
-
-		/*
-		 * Anonymous mappings are zero-filled.  Mapping the virtual tail
-		 * separately provides PE .bss without exposing file padding.
-		 */
-		if (extent > section->raw_data_size) {
-			unsigned long tail_addr = section_addr +
-						  section->raw_data_size;
-			unsigned long tail_size = PAGE_ALIGN(extent) -
-						  section->raw_data_size;
-
-			mapped = vm_mmap(NULL, tail_addr, tail_size, prot,
-					 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, 0);
-			if (IS_ERR_VALUE(mapped))
-				return (long)mapped;
-			if (mapped != tail_addr)
-				return -EEXIST;
-		}
+		if (!extent)
+			continue;
+		ret = vm_mprotect(section_addr, PAGE_ALIGN(extent),
+				  pe_section_prot(section));
+		if (ret)
+			return ret;
 	}
 	return 0;
 }
@@ -321,6 +454,7 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	struct mz_hdr mz;
 	struct pe_hdr pe;
 	struct pe32plus_opt_hdr opt;
+	struct data_dirent reloc_dir = {};
 	u64 file_size, pe_offset, optional_offset, section_offset;
 	unsigned long image_base, image_end, entry, stack;
 	unsigned long start_code = ULONG_MAX, end_code = 0;
@@ -365,16 +499,12 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	    !opt.entry_point || opt.entry_point >= opt.image_size ||
 	    !is_power_of_2(opt.section_align) ||
 	    !is_power_of_2(opt.file_align) ||
+	    opt.file_align < 512 || opt.file_align > SZ_64K ||
 	    opt.section_align < PAGE_SIZE ||
 	    opt.section_align > SZ_2M ||
 	    opt.section_align < opt.file_align ||
 	    !IS_ALIGNED(opt.section_align, PAGE_SIZE) ||
-	    opt.file_align != PAGE_SIZE ||
-	    (opt.dll_flags & (IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE |
-			      IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA)) ||
-	    !IS_ALIGNED(opt.image_size, PAGE_SIZE) ||
-	    !IS_ALIGNED(opt.image_size, opt.section_align) ||
-	    !IS_ALIGNED(opt.header_size, PAGE_SIZE))
+	    !IS_ALIGNED(opt.image_size, PAGE_SIZE))
 		return -ENOEXEC;
 
 	ret = pe_validate_sections(bprm->file, file_size, &pe, &opt,
@@ -383,6 +513,14 @@ static int load_pe_binary(struct linux_binprm *bprm)
 		return ret;
 	ret = pe_validate_directories(bprm->file, &pe, &opt,
 				      optional_offset);
+	if (ret)
+		goto out;
+	ret = pe_read_directory(bprm->file, &pe, &opt, optional_offset,
+				5, &reloc_dir);
+	if (ret == -ENOENT) {
+		memset(&reloc_dir, 0, sizeof(reloc_dir));
+		ret = 0;
+	}
 	if (ret)
 		goto out;
 
@@ -419,9 +557,16 @@ static int load_pe_binary(struct linux_binprm *bprm)
 	if (ret < 0)
 		goto out;
 
-	ret = pe_map_image(bprm->file, image_base, &opt, sections, pe.sections);
+	ret = pe_map_image(bprm->file, image_base, &image_base,
+			   &opt, sections, pe.sections, &reloc_dir);
 	if (ret)
 		goto out;
+	if (check_add_overflow(image_base, (unsigned long)opt.image_size,
+			       &image_end) || image_end >= TASK_SIZE_MAX) {
+		ret = -ENOEXEC;
+		goto out;
+	}
+	entry = image_base + opt.entry_point;
 
 	for (i = 0; i < pe.sections; i++) {
 		unsigned long begin = image_base + sections[i].virtual_address;
@@ -492,5 +637,5 @@ static void __exit exit_pe_binfmt(void)
 core_initcall(init_pe_binfmt);
 module_exit(exit_pe_binfmt);
 
-MODULE_DESCRIPTION("Minimal fixed-base PE32+ executable loader");
+MODULE_DESCRIPTION("Experimental PE32+ executable loader");
 MODULE_LICENSE("GPL");

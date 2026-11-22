@@ -9,6 +9,7 @@
  *  (C) Copyright 2002 Red Hat Inc, All Rights Reserved
  */
 
+#include <linux/export.h>
 #include <linux/pagewalk.h>
 #include <linux/hugetlb.h>
 #include <linux/shm.h>
@@ -868,7 +869,7 @@ fail:
  * pkey==-1 when doing a legacy mprotect()
  */
 static int do_mprotect_pkey(unsigned long start, size_t len,
-		unsigned long prot, int pkey)
+		unsigned long prot, int pkey, bool allow_exec)
 {
 	unsigned long nstart, end, tmp, reqprot;
 	struct vm_area_struct *vma, *prev;
@@ -965,6 +966,9 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 		new_vma_pkey = arch_override_mprotect_pkey(vma, prot, pkey);
 		newflags = calc_vm_prot_bits(prot, new_vma_pkey);
 		newflags |= (vma->vm_flags & ~mask_off_old_flags);
+		/* Only trusted in-kernel image loaders may add execute permission. */
+		if (allow_exec)
+			newflags |= VM_MAYEXEC;
 		new_vma_flags = legacy_to_vma_flags(newflags);
 
 		/* newflags >> 4 shift VM_MAY% in place of VM_% */
@@ -1019,15 +1023,25 @@ out:
 SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
 		unsigned long, prot)
 {
-	return do_mprotect_pkey(start, len, prot, -1);
+	return do_mprotect_pkey(start, len, prot, -1, false);
 }
+
+/*
+ * Kernel callers that populate executable images need the same validation
+ * and page-table update path as userspace mprotect(), without a syscall.
+ */
+int vm_mprotect(unsigned long start, size_t len, unsigned long prot)
+{
+	return do_mprotect_pkey(start, len, prot, -1, true);
+}
+EXPORT_SYMBOL_GPL(vm_mprotect);
 
 #ifdef CONFIG_ARCH_HAS_PKEYS
 
 SYSCALL_DEFINE4(pkey_mprotect, unsigned long, start, size_t, len,
 		unsigned long, prot, int, pkey)
 {
-	return do_mprotect_pkey(start, len, prot, pkey);
+	return do_mprotect_pkey(start, len, prot, pkey, false);
 }
 
 SYSCALL_DEFINE2(pkey_alloc, unsigned long, flags, unsigned long, init_val)

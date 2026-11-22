@@ -4522,6 +4522,7 @@ int vm_munmap(unsigned long start, size_t len);
 unsigned long __must_check vm_mmap(struct file *file, unsigned long addr,
 		unsigned long len, unsigned long prot,
 		unsigned long flag, unsigned long offset);
+int vm_mprotect(unsigned long start, size_t len, unsigned long prot);
 unsigned long __must_check vm_mmap_shadow_stack(unsigned long addr,
 		unsigned long len, unsigned long flags);
 

@@ -1,0 +1,18 @@
+#!/bin/sh
+# Minimal interactive init for the lin-nt GNU initramfs.
+export PATH=/bin:/usr/bin:/sbin:/usr/sbin
+export HOME=/root
+export TERM=linux
+
+mkdir -p /dev /dev/pts /proc /sys /run /root
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mount -t devpts devpts /dev/pts 2>/dev/null || true
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+
+echo
+echo "GNU userspace booted on lin-nt!"
+
+# setsid creates a new session and --ctty assigns the inherited console
+# as its controlling terminal. Bash can then manage foreground process groups.
+exec setsid --ctty /bin/bash -i

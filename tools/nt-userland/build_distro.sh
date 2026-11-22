@@ -27,6 +27,7 @@ command -v x86_64-w64-mingw32-gcc >/dev/null
 command -v python3 >/dev/null
 command -v qemu-system-x86_64 >/dev/null
 command -v cpio >/dev/null
+command -v gcc >/dev/null
 command -v gzip >/dev/null
 
 cd "$ROOT"
@@ -36,6 +37,7 @@ if [[ ! -f .config ]]; then
 fi
 
 scripts/config --enable BINFMT_PE \
+    --enable BINFMT_MISC \
     --enable NTSYNC \
     --enable DRM \
     --enable FB \
@@ -61,7 +63,12 @@ x86_64-w64-mingw32-gcc -nostdlib -nostartfiles \
     -Wl,--no-seh \
     -Wl,--no-insert-timestamp \
     "$BUILD/hello_world.o" -o "$BUILD/hello_world.exe"
+python3 "$WORK/clear_empty_imports.py" "$BUILD/hello_world.exe"
 python3 "$WORK/verify_pe.py" "$BUILD/hello_world.exe"
+
+gcc -O2 -static -o "$BUILD/peld" "$WORK/peld/peld.c"
+x86_64-w64-mingw32-gcc -O1 -D_UCRT "$WORK/peld/tests/hello.c" -o "$BUILD/hello_c.exe" -lucrt
+x86_64-w64-mingw32-gcc -O1 -nostdlib -e mainCRTStartup "$WORK/peld/tests/k32.c" -o "$BUILD/k32.exe" -lkernel32
 
 rm -rf "$ROOTFS"
 mkdir -p "$ROOTFS"/{bin,sbin,dev,proc,sys,tmp,windows}
@@ -74,11 +81,16 @@ done
 
 cp "$BUILD/hello_world.exe" "$ROOTFS/windows/hello_world.exe"
 chmod 0755 "$ROOTFS/windows/hello_world.exe"
+cp "$BUILD/peld" "$ROOTFS/windows/peld"
+cp "$BUILD/hello_c.exe" "$BUILD/k32.exe" "$ROOTFS/windows/"
+chmod 0755 "$ROOTFS/windows/peld" "$ROOTFS/windows/hello_c.exe" "$ROOTFS/windows/k32.exe"
 
 cat > "$ROOTFS/init" <<'INIT'
 #!/bin/sh
 /bin/mount -t proc proc /proc
 /bin/mount -t sysfs sysfs /sys
+/bin/mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc
+echo ':PE:M::MZ::/windows/peld:' > /proc/sys/fs/binfmt_misc/register
 echo "Linux NT hybrid kernel initramfs"
 echo "Try /windows/hello_world.exe for the static PE32+ smoke test."
 exec /bin/sh

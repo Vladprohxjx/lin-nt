@@ -15,9 +15,11 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/module.h>
+#include <linux/ptrace.h>
 #include <linux/overflow.h>
 #include <linux/pe.h>
 #include <linux/sched.h>
+#include <linux/sched/task_stack.h>
 #include <linux/slab.h>
 #include <linux/sizes.h>
 #include <linux/uaccess.h>
@@ -481,7 +483,8 @@ static struct linux_binfmt pe_format = {
 
 static int __init init_pe_binfmt(void)
 {
-	return register_binfmt(&pe_format);
+	register_binfmt(&pe_format);
+	return 0;
 }
 
 static void __exit exit_pe_binfmt(void)
